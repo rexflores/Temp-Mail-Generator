@@ -1,5 +1,5 @@
 Flask==2.3.3
-mailtm==1.1.1
+mailtm==0.0.81
 bleach==6.0.0
 python-dateutil==2.8.2
 tinycss2
