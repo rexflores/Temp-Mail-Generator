@@ -1,174 +1,214 @@
-# Temporary Email Generator
+# 📧 TempMail - Modern Email Client
 
-This project allows users to generate temporary email addresses using the **Mail.tm** service. The project has three interfaces:
+A modernized temporary email generator with a Gmail/Outlook-style interface, built using **Mail.tm** service. Features a responsive design, dark mode, HTML email rendering, and real-time email monitoring.
 
-- **Web Interface**: A simple web application using **Flask**.
-- **GUI Interface**: A graphical user interface built with **Tkinter**.
-- **CLI Interface**: A command-line interface for generating and managing temporary emails.
+## ✨ Features
 
-## Features
+### 🎨 Modern UI/UX
+- **Gmail/Outlook-style interface** with professional design
+- **Responsive layout** that works on all devices
+- **Dark/Light theme toggle** with user preference persistence
+- **Real-time email updates** with automatic polling
+- **Smooth animations** and hover effects throughout
 
-- **Generate Random Email**: Create a random temporary email address with a custom domain.
-- **Copy Email**: Copy the generated email address to the clipboard for easy use.
-- **Listen for Emails**: Start listening for incoming emails and display them on the interface.
-- **Customizable**: Specify a custom username for the email address.
-  
-## Requirements
+### 📧 Email Management
+- **HTML email rendering** with secure sanitization
+- **Attachment support** with preview and download
+- **Folder organization** (Inbox, Sent, Drafts, Trash)
+- **Email actions** (star, mark read/unread, delete)
+- **Search functionality** across all emails
 
-### Dependencies for all versions:
-- **Flask** (for the Web Interface)
-- **Tkinter** (for the GUI Interface, usually comes pre-installed with Python)
-- **mailtm** (for interacting with the Mail.tm API)
+### 🔒 Security
+- **XSS protection** with HTML sanitization using bleach
+- **Safe attachment handling**
+- **Secure email content rendering**
 
-Dependencies are listed in the `requirements.txt` file.
+### ⚡ Interactive Features
+- **Loading states** with skeleton loaders
+- **Toast notifications** for user feedback
+- **Keyboard shortcuts** (Enter to register email)
+- **Mobile-responsive** sidebar navigation
 
-## Installation
+## 🚀 Quick Start
 
-### 1. Clone the repository:
+### Installation
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/rexflores/Temp-Mail-Generator.git
+   cd Temp-Mail-Generator
+   ```
+
+2. **Set up virtual environment (recommended):**
+   ```bash
+   python -m venv venv
+   
+   # Windows
+   venv\Scripts\activate
+   
+   # Mac/Linux
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Running the Application
+
+**Web Interface (Modern UI):**
+```bash
+python app.py
+```
+Then open your browser to `http://localhost:5000`
+
+**GUI Interface (Tkinter):**
+```bash
+cd GUI
+python gui_app.py
+```
+
+**CLI Interface:**
+```bash
+cd CLI
+python cli_app.py
+```
+
+## 📱 How to Use
+
+### 1. Register a Temporary Email
+- Enter a custom prefix in the sidebar
+- Click the "+" button to register
+- Your temporary email will be generated and displayed
+
+### 2. Start Listening for Emails
+- Click the "Listen" button to start monitoring
+- New emails will appear automatically in real-time
+- Email count badges will update in the sidebar
+
+### 3. Read and Manage Emails
+- Click on any email in the list to view details
+- Use action buttons to reply, forward, delete, or star emails
+- Switch between folders using the sidebar navigation
+
+### 4. Customize Your Experience
+- Toggle between light and dark themes
+- Use the search box to find specific emails
+- Refresh manually or let auto-polling handle updates
+
+## 🛠️ Technical Details
+
+### Backend (Flask)
+- **Enhanced API endpoints** for modern email client features
+- **HTML sanitization** with bleach library for XSS protection
+- **Error handling** and robust email processing
+- **Folder management** and email organization
+- **RESTful API** design for frontend integration
+
+### Frontend
+- **Vanilla JavaScript** with modern ES6+ features
+- **CSS Custom Properties** for theme management
+- **Feather Icons** for consistent iconography
+- **DOMPurify** for additional client-side sanitization
+- **Responsive CSS Grid/Flexbox** layouts
+
+### Dependencies
+- **Flask 2.3.3** - Web framework
+- **mailtm 1.1.1** - Mail.tm API client
+- **bleach 6.0.0** - HTML sanitization
+- **python-dateutil 2.8.2** - Date processing
+
+## 🌐 Deployment
+
+### Vercel Deployment
+The project includes `vercel.json` configuration for easy deployment:
 
 ```bash
-git clone https://github.com/rexflores/Temp-Mail-Generator.git
-cd temp-email-generator
+npm install -g vercel
+vercel
 ```
 
-### 2. Set up a virtual environment (optional but recommended):
-
-For **Windows**:
-
+### Local Development
 ```bash
-python -m venv venv
-venv\Scripts\activate
+python app.py
+# App runs on http://localhost:5000
 ```
 
-For **Mac/Linux**:
+## 📁 Project Structure
 
+```
+Temp-Mail-Generator/
+├── app.py                 # Modern Flask application
+├── requirements.txt       # Python dependencies
+├── vercel.json           # Vercel deployment config
+├── test_sanitization.py  # HTML sanitization tests
+├── templates/
+│   └── index.html        # Modern email client UI
+├── GUI/
+│   └── gui_app.py        # Tkinter GUI version
+└── CLI/
+    └── cli_app.py        # Command-line version
+```
+
+## 🔧 API Endpoints
+
+- `GET /` - Main email client interface
+- `GET /api/status` - Application status
+- `POST /register_email` - Register new temporary email
+- `POST /start_listening` - Start email monitoring
+- `GET /api/emails` - Get emails with pagination/filtering
+- `GET /api/emails/<id>` - Get specific email details
+- `POST /api/emails/<id>/action` - Perform email actions
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+**HTML Sanitization Errors:**
+- Ensure bleach 6.0.0 is installed: `pip install bleach==6.0.0`
+- The app includes fallback sanitization if bleach fails
+
+**Email Not Receiving:**
+- Check that you've clicked "Listen" to start monitoring
+- Verify your temporary email is valid and active
+- Check browser console for any JavaScript errors
+
+**UI Not Loading Properly:**
+- Ensure all CDN resources are accessible (DOMPurify, Feather Icons)
+- Clear browser cache and reload
+- Check browser developer tools for errors
+
+### Development
+
+**Running Tests:**
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python test_sanitization.py
 ```
 
-### 3. Install dependencies:
+**Debug Mode:**
+The Flask app runs in debug mode by default during development.
 
-```bash
-pip install -r requirements.txt
-```
+## 🤝 Contributing
 
----
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and test thoroughly
+4. Commit your changes: `git commit -m 'Add feature'`
+5. Push to the branch: `git push origin feature-name`
+6. Submit a pull request
 
-## Usage
+## 📄 License
 
-### Web Interface
+This project is open source and available under the [MIT License](LICENSE).
 
-To use the **Web Interface**:
+## 🙏 Acknowledgments
 
-1. Run the Flask app:
-
-   ```bash
-   python app.py
-   ```
-
-2. Open your browser and go to `http://localhost:5000/`.
-
-3. You can generate a temporary email, copy it, and listen for incoming emails directly on the web page.
-
----
-
-### GUI Interface (Tkinter)
-
-To use the **GUI Interface**:
-
-1. Navigate to the `GUI` folder:
-
-   ```bash
-   cd GUI
-   ```
-
-2. Run the Tkinter GUI version by executing:
-
-   ```bash
-   python gui_app.py
-   ```
-
-3. The Tkinter window will open, and you can interact with the application to generate and manage temporary email addresses.
+- **Mail.tm** for providing the temporary email service
+- **Feather Icons** for the beautiful icon set
+- **DOMPurify** for client-side HTML sanitization
+- **Flask** for the excellent web framework
 
 ---
 
-### CLI Interface
-
-To use the **CLI Interface**:
-
-1. Navigate to the `CLI` folder:
-
-   ```bash
-   cd CLI
-   ```
-
-2. Run the Python script from the command line:
-
-   ```bash
-   python cli_app.py
-   ```
-
-3. The CLI will prompt you with options to generate an email, copy it, and start listening for incoming emails. You interact using the terminal.
-
----
-
-## Deploying to Vercel (Web Version)
-
-To deploy the **Web Interface** to **Vercel**, follow these steps:
-
-1. Sign up or log in to [Vercel](https://vercel.com).
-2. Install Vercel CLI globally:
-
-    ```bash
-    npm install -g vercel
-    ```
-
-3. Run the following command in the root of your project directory:
-
-    ```bash
-    vercel
-    ```
-
-4. Vercel will automatically deploy your project and give you a URL (e.g., `https://your-project-name.vercel.app`).
-
-### Vercel Configuration
-
-The project includes a `vercel.json` configuration file that tells Vercel how to build and serve the Flask app. It uses the `@vercel/python` runtime and routes all traffic to `app.py`.
-
----
-
-## Project Structure
-
-Here is the updated structure of the project:
-
-```
-/Temp-Mail-Generator
-│
-├── app.py                # Main Flask application for the Web Interface
-├── requirements.txt      # List of dependencies
-├── vercel.json           # Vercel deployment configuration
-├── /templates
-│   └── index.html        # HTML template for the Web Interface UI
-│
-├── /GUI
-│   └── gui_app.py        # Tkinter GUI application for the GUI version
-│
-└── /CLI
-    └── cli_app.py        # CLI application for the Command-Line Interface version
-```
-
----
-
-## Troubleshooting
-
-- **ModuleNotFoundError**: If you encounter issues related to missing modules, make sure all dependencies are listed in `requirements.txt` and that you have installed them using `pip install -r requirements.txt`.
-- **Deployment Errors on Vercel**: Ensure that your `vercel.json` and `runtime.txt` are properly configured and that you are using a supported Python version (e.g., Python 3.9).
-- **GUI Issues**: If the Tkinter GUI doesn't open or work, ensure that you have Tkinter installed (it is usually pre-installed with Python, but can be installed manually if needed).
-- **CLI Issues**: Make sure you run the CLI scripts from the terminal and follow the prompts correctly.
-
----
-
-## Contributing
-
-Feel free to contribute to this project by creating issues, submitting pull requests, or suggesting improvements. All contributions are welcome!
+**Built with ❤️ for modern email management**
