@@ -374,23 +374,54 @@ def process_email_content(message):
             'preview_text': 'Error processing email content'
         }
 
-@app.route('/start_listening', methods=['POST'])
+polling_thread_running = False
+
+def global_polling_loop():
+    global polling_thread_running
+    polling_thread_running = True
+    while True:
+        try:
+            for inbox_id, inbox in list(inboxes.items()):
+                try:
+                    client = inbox['client']
+                    resp = client.session.get('https://api.mail.tm/messages', params={'page': 1})
+                    if resp.status_code == 200:
+                        messages = resp.json().get('hydra:member', [])
+                        existing_ids = {e['id'] for e in inbox['received_emails']}
+                        
+                        for msg in messages:
+                            if msg['id'] not in existing_ids:
+                                full_msg = client.session.get(f"https://api.mail.tm/messages/{msg['id']}")
+                                if full_msg.status_code == 200:
+                                    email_data = process_email_content(full_msg.json())
+                                    inbox['received_emails'].append(email_data)
+                                    inbox['folders']['inbox'].append(email_data['id'])
+                                time.sleep(0.5)
+                    elif resp.status_code == 429:
+                        time.sleep(2)
+                except Exception as e:
+                    print(f"Polling error for {inbox_id}: {e}")
+                
+                time.sleep(1.5) # delay between inboxes to prevent 429
+        except Exception as e:
+            print(f"Global poller error: {e}")
+        time.sleep(4) # Base delay for the loop
+
+@app.route('/api/listen', methods=['POST'])
 def start_listening():
+    """Start listening for new emails on an inbox"""
     inbox_id = request.headers.get('X-Inbox-Id')
+    
     inbox = get_inbox_data(inbox_id)
     if not inbox:
         return jsonify({"error": "Inbox not found", "success": False}), 404
         
     try:
-        def listener(message):
-            try:
-                email_data = process_email_content(message)
-                inbox['received_emails'].append(email_data)
-                inbox['folders']['inbox'].append(email_data['id'])
-            except Exception as e:
-                print(f"Error in listener: {e}")
-
-        inbox['client'].start(listener, interval=1)
+        global polling_thread_running
+        if not polling_thread_running:
+            import threading
+            threading.Thread(target=global_polling_loop, daemon=True).start()
+            
         return jsonify({
             "message": "Started listening for new emails",
             "success": True,

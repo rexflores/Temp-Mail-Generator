@@ -1086,7 +1086,6 @@ body {
         visibility: visible;
     }
 
-    /* Sidebar as overlay */
     .sidebar {
         position: fixed;
         left: -100%;
@@ -1102,12 +1101,31 @@ body {
         border-right: 1px solid var(--border-light);
         transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         height: calc(100vh - 110px);
+        max-height: none;
         padding: 20px 16px;
+        overflow-y: auto;
     }
     
     .sidebar.open {
         left: 0;
     }
+    
+    /* Revert folder-nav to vertical list for mobile drawer */
+    .folder-nav {
+        display: block;
+        overflow-x: visible;
+        padding: 0;
+    }
+    
+    .folder-item {
+        margin-bottom: 4px;
+        white-space: normal;
+    }
+    
+    .nav-section-title {
+        display: block;
+    }
+
     
     /* Main Content */
     .main-content {

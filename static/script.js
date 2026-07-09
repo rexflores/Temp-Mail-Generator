@@ -254,7 +254,7 @@ async function startListening() {
     }
 
     try {
-        const data = await apiCall('/start_listening', { method: 'POST' });
+        const data = await apiCall('/api/listen', { method: 'POST' });
         
         if (data.success) {
             AppState.isListening = true;
@@ -732,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const success = await loginEmail(acc.email, acc.password);
             if (success) {
                 // start listening directly via API call to avoid UI side effects for background accounts
-                apiCall('/start_listening', { method: 'POST', headers: { 'X-Inbox-Id': acc.email } }).catch(()=>{});
+                apiCall('/api/listen', { method: 'POST', headers: { 'X-Inbox-Id': acc.email } }).catch(()=>{});
             }
         })).then(() => {
             switchAccount(AppState.accounts[0].email);
