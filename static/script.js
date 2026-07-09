@@ -434,15 +434,29 @@ async function openEmailDetail(emailId) {
             
             // Render email content
             if (email.content_type === 'html' && email.html_content) {
-                $('#detail-content').innerHTML = sanitizeHtml(email.html_content);
+                let html = email.html_content;
+                // Replace inline cid: references with proxy URLs
+                if (email.attachments) {
+                    email.attachments.forEach(att => {
+                        const cid = att.content_id || att.id;
+                        if (cid) {
+                            const proxyUrl = `/api/emails/${emailId}/attachments/${att.id}?email=${encodeURIComponent(AppState.currentEmail)}`;
+                            html = html.replace(new RegExp(`cid:${cid}`, 'gi'), proxyUrl);
+                        }
+                    });
+                }
+                $('#detail-content').innerHTML = sanitizeHtml(html);
+                $('#detail-content').classList.add('html-mode');
             } else if (email.text_content) {
                 if (email.text_content.includes('<a href') || email.text_content.includes('<br>')) {
                     $('#detail-content').innerHTML = email.text_content;
                 } else {
                     $('#detail-content').innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; line-height: 1.6;">${email.text_content || 'No content'}</pre>`;
                 }
+                $('#detail-content').classList.remove('html-mode');
             } else {
                 $('#detail-content').innerHTML = '<p style="color: var(--text-muted); font-style: italic;">No content available</p>';
+                $('#detail-content').classList.remove('html-mode');
             }
             
             // Handle attachments

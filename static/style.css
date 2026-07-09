@@ -770,6 +770,15 @@ body {
     font-size: 15px;
 }
 
+.email-html-content.html-mode {
+    background-color: #ffffff;
+    color: #000000;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    overflow-x: auto;
+}
+
 .email-html-content img {
     max-width: 100%;
     height: auto;

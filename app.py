@@ -179,6 +179,7 @@ def sanitize_html_content(html_content):
             html_content, 
             tags=allowed_tags, 
             attributes=allowed_attributes,
+            protocols=['http', 'https', 'mailto', 'data', 'cid'],
             css_sanitizer=css_sanitizer
         )
     except Exception as e:
@@ -279,7 +280,8 @@ def extract_attachments(message):
                 'size': attachment.get('size', 0),
                 'content': attachment.get('content', ''),
                 'downloadUrl': attachment.get('downloadUrl', ''),
-                'is_inline': attachment.get('disposition', '').lower() == 'inline'
+                'is_inline': attachment.get('disposition', '').lower() == 'inline',
+                'content_id': attachment.get('contentId', '').strip('<>') if attachment.get('contentId') else None
             }
             
             # Determine if attachment can be previewed
@@ -311,7 +313,12 @@ def process_email_content(message):
         # Process email content with error handling
         try:
             html_content = message.get('html', '')
+            if isinstance(html_content, list):
+                html_content = '\n'.join(html_content)
+                
             text_content = message.get('text', '')
+            if isinstance(text_content, list):
+                text_content = '\n'.join(text_content)
             
             # Check if we have HTML content or if text content looks like HTML
             has_html = bool(html_content and html_content.strip())
@@ -556,12 +563,14 @@ def test_email_processing():
 @app.route('/get_emails', methods=['GET'])
 def get_emails_legacy():
     """Legacy endpoint for backward compatibility"""
-    if not received_emails:
+    inbox_id = request.headers.get('X-Inbox-Id')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox or not inbox['received_emails']:
         return jsonify([])
     
     # Return simplified format for legacy compatibility
     legacy_format = []
-    for email in received_emails:
+    for email in inbox['received_emails']:
         legacy_email = {
             "subject": email['subject'],
             "content": email.get('html_content', email.get('text_content', 'No content'))
