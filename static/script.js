@@ -57,8 +57,8 @@ function formatDate(dateString) {
 
 function sanitizeHtml(html) {
     return DOMPurify.sanitize(html, {
-        ALLOWED_TAGS: ['p', 'br', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'img', 'table', 'tr', 'td', 'th'],
-        ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'class', 'target']
+        ALLOWED_TAGS: ['p', 'br', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'em', 'i', 'u', 'ul', 'ol', 'li', 'a', 'img', 'table', 'tr', 'td', 'th', 'tbody', 'thead'],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'style', 'class', 'target', 'width', 'height', 'border', 'cellpadding', 'cellspacing']
     });
 }
 

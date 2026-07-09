@@ -180,7 +180,8 @@ def sanitize_html_content(html_content):
             tags=allowed_tags, 
             attributes=allowed_attributes,
             protocols=['http', 'https', 'mailto', 'data', 'cid'],
-            css_sanitizer=css_sanitizer
+            css_sanitizer=css_sanitizer,
+            strip=True
         )
     except Exception as e:
         # Fallback: Basic HTML sanitization without bleach
