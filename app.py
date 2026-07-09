@@ -10,15 +10,28 @@ import re
 from urllib.parse import urlparse
 
 app = Flask(__name__)
-email_client = Email()  # Initialize the Email object
-current_email = None  # Store the current email address
-received_emails = []  # Store received emails with enhanced data structure
-folders = {
-    'inbox': [],
-    'sent': [],
-    'drafts': [],
-    'trash': []
-}
+
+# Multi-inbox state: maps email_address string to a dict
+inboxes = {}
+
+def get_inbox_data(inbox_id):
+    if not inbox_id or inbox_id not in inboxes:
+        return None
+    return inboxes[inbox_id]
+
+def create_inbox(address, client=None):
+    if address not in inboxes:
+        inboxes[address] = {
+            'client': client or Email(),
+            'received_emails': [],
+            'folders': {
+                'inbox': [],
+                'sent': [],
+                'drafts': [],
+                'trash': []
+            }
+        }
+    return inboxes[address]
 
 @app.route('/')
 def index():
@@ -27,56 +40,108 @@ def index():
 @app.route('/api/status', methods=['GET'])
 def get_status():
     """Get current application status"""
+    inbox_id = request.headers.get('X-Inbox-Id')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox:
+        return jsonify({"error": "Inbox not found", "success": False}), 404
+        
     return jsonify({
-        "current_email": current_email,
-        "domain": email_client.domain if email_client else None,
-        "total_emails": len(received_emails),
-        "folders": {folder: len(emails) for folder, emails in folders.items()}
+        "current_email": inbox_id,
+        "domain": inbox['client'].domain,
+        "total_emails": len(inbox['received_emails']),
+        "folders": {folder: len(emails) for folder, emails in inbox['folders'].items()}
     })
 
-@app.route('/get_domain', methods=['GET'])
-def get_domain():
+@app.route('/get_domains', methods=['GET'])
+def get_domains():
     try:
-        domain = email_client.domain
-        return jsonify({"domain": domain, "success": True})
+        temp_client = Email()
+        url = "https://api.mail.tm/domains"
+        response = temp_client.session.get(url)
+        response.raise_for_status()
+        data = response.json()
+        domains = [d['domain'] for d in data.get('hydra:member', []) if d.get('isActive')]
+        return jsonify({"domains": domains, "success": True})
     except Exception as e:
-        return jsonify({"error": f"Failed to fetch domain: {str(e)}", "success": False}), 500
+        return jsonify({"error": f"Failed to fetch domains: {str(e)}", "success": False}), 500
 
 @app.route('/register_email', methods=['POST'])
 def register_email():
-    global current_email
     try:
         data = request.get_json()
         email_prefix = data.get("email_prefix", "").strip()
+        domain = data.get("domain", "").strip()
 
         if not email_prefix:
             return jsonify({"error": "Email prefix is required.", "success": False}), 400
 
-        # Generate a random suffix to ensure uniqueness
+        # Generate a random suffix and password
         random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=5))
-        # Combine prefix with a random suffix
-        email_client.register(email_prefix + random_suffix)
-        current_email = email_client.address
+        username = email_prefix + random_suffix
+        password = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
         
-        # Clear previous emails when new email is registered
-        received_emails.clear()
-        for folder in folders.values():
-            folder.clear()
+        temp_client = Email()
+        # Register with explicit password
+        temp_client.register(username=username, password=password, domain=domain if domain else None)
+        address = temp_client.address
+        
+        create_inbox(address, temp_client)
             
         return jsonify({
-            "email": current_email, 
+            "email": address,
+            "password": password,
             "success": True,
-            "message": f"Email {current_email} successfully registered"
+            "message": f"Email {address} successfully registered"
         })
     except Exception as e:
         return jsonify({"error": f"Failed to register email: {str(e)}", "success": False}), 500
 
+@app.route('/login_email', methods=['POST'])
+def login_email():
+    try:
+        data = request.get_json()
+        address = data.get("email", "").strip()
+        password = data.get("password", "").strip()
+
+        if not address or not password:
+            return jsonify({"error": "Email and password are required.", "success": False}), 400
+
+        temp_client = Email()
+        temp_client.address = address
+        temp_client.get_token(password)
+
+        inbox = create_inbox(address, temp_client)
+        
+        # Clear previous emails when logging in
+        inbox['received_emails'].clear()
+        for folder in inbox['folders'].values():
+            folder.clear()
+
+        try:
+            msgs = temp_client.message_list()
+            for msg_meta in msgs:
+                full_msg = temp_client.message(msg_meta['id'])
+                email_data = process_email_content(full_msg)
+                inbox['received_emails'].append(email_data)
+                inbox['folders']['inbox'].append(email_data['id'])
+        except Exception as e:
+            print(f"Error fetching existing messages: {e}")
+
+        return jsonify({
+            "email": address,
+            "success": True,
+            "message": f"Successfully logged into {address}"
+        })
+    except Exception as e:
+        return jsonify({"error": f"Failed to login: {str(e)}", "success": False}), 500
+
 @app.route('/copy_email', methods=['POST'])
 def copy_email():
-    if current_email:
+    inbox_id = request.headers.get('X-Inbox-Id')
+    if inbox_id:
         return jsonify({
             "message": "Email copied to clipboard!", 
-            "email": current_email,
+            "email": inbox_id,
             "success": True
         })
     return jsonify({"error": "No email to copy!", "success": False}), 400
@@ -208,10 +273,12 @@ def extract_attachments(message):
     if 'attachments' in message:
         for attachment in message['attachments']:
             attachment_info = {
+                'id': attachment.get('id', ''),
                 'filename': attachment.get('filename', 'Unknown'),
                 'content_type': attachment.get('contentType', 'application/octet-stream'),
                 'size': attachment.get('size', 0),
                 'content': attachment.get('content', ''),
+                'downloadUrl': attachment.get('downloadUrl', ''),
                 'is_inline': attachment.get('disposition', '').lower() == 'inline'
             }
             
@@ -301,35 +368,25 @@ def process_email_content(message):
 
 @app.route('/start_listening', methods=['POST'])
 def start_listening():
+    inbox_id = request.headers.get('X-Inbox-Id')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox:
+        return jsonify({"error": "Inbox not found", "success": False}), 404
+        
     try:
         def listener(message):
             try:
-                print(f"Raw message received: {message}")
-                print(f"Message keys: {message.keys() if isinstance(message, dict) else 'Not a dict'}")
-                if isinstance(message, dict):
-                    print(f"HTML content present: {'html' in message}")
-                    print(f"Text content present: {'text' in message}")
-                    if 'html' in message:
-                        print(f"HTML length: {len(message['html']) if message['html'] else 0}")
-                    if 'text' in message:
-                        print(f"Text length: {len(message['text']) if message['text'] else 0}")
-                        print(f"Text preview: {message['text'][:200] if message['text'] else 'None'}...")
-                
                 email_data = process_email_content(message)
-                received_emails.append(email_data)
-                folders['inbox'].append(email_data['id'])
-                print(f"New email processed: {email_data['subject']} (Content type: {email_data['content_type']})")
+                inbox['received_emails'].append(email_data)
+                inbox['folders']['inbox'].append(email_data['id'])
             except Exception as e:
                 print(f"Error in listener: {e}")
-                import traceback
-                traceback.print_exc()
-                # Continue listening even if one email fails to process
 
-        email_client.start(listener, interval=1)
+        inbox['client'].start(listener, interval=1)
         return jsonify({
             "message": "Started listening for new emails",
             "success": True,
-            "email": current_email
+            "email": inbox_id
         })
     except Exception as e:
         return jsonify({"error": f"Failed to start listening: {str(e)}", "success": False}), 500
@@ -337,21 +394,23 @@ def start_listening():
 @app.route('/api/emails', methods=['GET'])
 def get_emails():
     """Get emails with optional filtering and pagination"""
+    inbox_id = request.headers.get('X-Inbox-Id')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox:
+        return jsonify({"error": "Inbox not found", "success": False}), 404
+        
     folder = request.args.get('folder', 'inbox')
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 50))
     
-    # Filter emails by folder
     if folder == 'all':
-        filtered_emails = received_emails
+        filtered_emails = inbox['received_emails']
     else:
-        email_ids = folders.get(folder, [])
-        filtered_emails = [email for email in received_emails if email['id'] in email_ids]
+        email_ids = inbox['folders'].get(folder, [])
+        filtered_emails = [email for email in inbox['received_emails'] if email['id'] in email_ids]
     
-    # Sort by timestamp (newest first)
     filtered_emails.sort(key=lambda x: x['timestamp'], reverse=True)
     
-    # Pagination
     start_idx = (page - 1) * per_page
     end_idx = start_idx + per_page
     paginated_emails = filtered_emails[start_idx:end_idx]
@@ -368,11 +427,15 @@ def get_emails():
 @app.route('/api/emails/<email_id>', methods=['GET'])
 def get_email_detail(email_id):
     """Get detailed view of a specific email"""
-    email = next((e for e in received_emails if e['id'] == email_id), None)
+    inbox_id = request.headers.get('X-Inbox-Id')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox:
+        return jsonify({"error": "Inbox not found", "success": False}), 404
+        
+    email = next((e for e in inbox['received_emails'] if e['id'] == email_id), None)
     if not email:
         return jsonify({"error": "Email not found", "success": False}), 404
     
-    # Mark as read
     email['is_read'] = True
     
     return jsonify({
@@ -383,10 +446,15 @@ def get_email_detail(email_id):
 @app.route('/api/emails/<email_id>/action', methods=['POST'])
 def email_action(email_id):
     """Perform actions on emails (mark read/unread, star, delete, move)"""
+    inbox_id = request.headers.get('X-Inbox-Id')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox:
+        return jsonify({"error": "Inbox not found", "success": False}), 404
+        
     data = request.get_json()
     action = data.get('action')
     
-    email = next((e for e in received_emails if e['id'] == email_id), None)
+    email = next((e for e in inbox['received_emails'] if e['id'] == email_id), None)
     if not email:
         return jsonify({"error": "Email not found", "success": False}), 404
     
@@ -399,26 +467,70 @@ def email_action(email_id):
     elif action == 'unstar':
         email['is_starred'] = False
     elif action == 'delete':
-        # Move to trash
-        for folder_name, email_list in folders.items():
-            if email_id in email_list:
-                email_list.remove(email_id)
-        folders['trash'].append(email_id)
-        email['folder'] = 'trash'
+        try:
+            url = f"https://api.mail.tm/messages/{email_id}"
+            response = inbox['client'].session.delete(url)
+            
+            if email in inbox['received_emails']:
+                inbox['received_emails'].remove(email)
+            for folder_name, email_list in inbox['folders'].items():
+                if email_id in email_list:
+                    email_list.remove(email_id)
+                    
+            return jsonify({
+                "success": True,
+                "message": "Email permanently deleted"
+            })
+        except Exception as e:
+            return jsonify({"error": f"Failed to delete email: {str(e)}", "success": False}), 500
     elif action == 'move':
         target_folder = data.get('target_folder', 'inbox')
-        # Remove from current folder
-        for folder_name, email_list in folders.items():
+        for folder_name, email_list in inbox['folders'].items():
             if email_id in email_list:
                 email_list.remove(email_id)
-        # Add to target folder
-        folders[target_folder].append(email_id)
+        inbox['folders'][target_folder].append(email_id)
         email['folder'] = target_folder
     
     return jsonify({
         "success": True,
         "message": f"Action '{action}' completed successfully"
     })
+
+@app.route('/api/emails/<email_id>/attachments/<attachment_id>', methods=['GET'])
+def download_attachment(email_id, attachment_id):
+    inbox_id = request.args.get('email')
+    inbox = get_inbox_data(inbox_id)
+    if not inbox:
+        return jsonify({"error": "Unauthorized", "success": False}), 401
+    
+    email_data = next((e for e in inbox['received_emails'] if e['id'] == email_id), None)
+    if not email_data:
+        return jsonify({"error": "Email not found", "success": False}), 404
+    
+    attachment = next((a for a in email_data.get('attachments', []) if a['id'] == attachment_id), None)
+    if not attachment:
+        return jsonify({"error": "Attachment not found", "success": False}), 404
+        
+    download_url = attachment.get('downloadUrl')
+    if not download_url:
+        return jsonify({"error": "Download URL not available", "success": False}), 404
+        
+    try:
+        client = inbox['client']
+        url = f"https://api.mail.tm{download_url}"
+        response = client.session.get(url)
+        response.raise_for_status()
+        
+        from flask import Response
+        return Response(
+            response.content,
+            mimetype=attachment['content_type'],
+            headers={
+                "Content-Disposition": f'attachment; filename="{attachment["filename"]}"'
+            }
+        )
+    except Exception as e:
+        return jsonify({"error": str(e), "success": False}), 500
 
 @app.route('/api/test_email_processing', methods=['POST'])
 def test_email_processing():
