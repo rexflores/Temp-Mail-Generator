@@ -485,6 +485,7 @@ body {
     display: flex;
     flex-direction: column;
     min-width: 0; /* Important for flex-child truncation */
+    min-height: 0; /* Important for nested scrollable areas */
 }
 
 /* Email List View */
@@ -671,7 +672,8 @@ body {
 .email-detail {
     display: none;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     border-radius: 16px;
     overflow: hidden;
 }
@@ -1233,5 +1235,6 @@ body {
     
     .email-detail-content {
         padding: 20px 16px;
+        overflow-y: auto;
     }
 }
