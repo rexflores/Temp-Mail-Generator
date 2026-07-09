@@ -85,6 +85,10 @@ async function apiCall(endpoint, options = {}) {
         
         if (AppState.currentEmail) {
             headers['X-Inbox-Id'] = AppState.currentEmail;
+            const account = AppState.accounts.find(a => a.email === AppState.currentEmail);
+            if (account && account.token) {
+                headers['Authorization'] = `Bearer ${account.token}`;
+            }
         }
 
         const response = await fetch(endpoint, {
@@ -167,7 +171,7 @@ async function registerEmail() {
 
         if (data.success) {
             if (!AppState.accounts.some(a => a.email === data.email)) {
-                AppState.accounts.push({ email: data.email, password: data.password });
+                AppState.accounts.push({ email: data.email, password: data.password, token: data.token });
                 saveAccounts();
             }
             
@@ -202,6 +206,13 @@ async function loginEmail(address, password) {
             method: 'POST',
             body: JSON.stringify({ email: address, password: password })
         });
+        if (data.success && data.token) {
+            const acc = AppState.accounts.find(a => a.email === address);
+            if (acc) {
+                acc.token = data.token;
+                saveAccounts();
+            }
+        }
         return data.success;
     } catch (error) {
         return false;
@@ -253,29 +264,19 @@ async function startListening() {
         return;
     }
 
-    try {
-        const data = await apiCall('/api/listen', { method: 'POST' });
-        
-        if (data.success) {
-            AppState.isListening = true;
-            $('#start-listening-btn').innerHTML = '<i data-feather="stop-circle"></i> Stop';
-            $('#start-listening-btn').classList.remove('btn-primary');
-            $('#start-listening-btn').classList.add('btn-secondary');
-            feather.replace();
-            
-            showToast('Started listening for emails', 'success');
-            
-            // Render empty inbox if it's currently showing the initial empty state
-            renderEmailList(AppState.emails);
-            
-            // Start polling for new emails
-            startEmailPolling();
-        } else {
-            showToast(data.error || 'Failed to start listening', 'error');
-        }
-    } catch (error) {
-        showToast('Failed to start listening', 'error');
-    }
+    AppState.isListening = true;
+    $('#start-listening-btn').innerHTML = '<i data-feather="stop-circle"></i> Stop';
+    $('#start-listening-btn').classList.remove('btn-primary');
+    $('#start-listening-btn').classList.add('btn-secondary');
+    feather.replace();
+    
+    showToast('Started listening for emails', 'success');
+    
+    // Render empty inbox if it's currently showing the initial empty state
+    renderEmailList(AppState.emails);
+    
+    // Start polling for new emails (stateless to the backend)
+    startEmailPolling();
 }
 
 let pollingInterval;
@@ -361,7 +362,7 @@ function renderEmailList(emails) {
                 </div>
                 <div class="email-preview">${email.preview_text}</div>
             </div>
-            ${email.attachments.length > 0 ? '<i data-feather="paperclip" class="email-attachment-icon"></i>' : ''}
+            ${email.has_attachments ? '<i data-feather="paperclip" class="email-attachment-icon"></i>' : ''}
             <div class="email-date">${formatDate(email.date)}</div>
         </div>
     `).join('');
@@ -440,7 +441,9 @@ async function openEmailDetail(emailId) {
                     email.attachments.forEach(att => {
                         const cid = att.content_id || att.id;
                         if (cid) {
-                            const proxyUrl = `/api/emails/${emailId}/attachments/${att.id}?email=${encodeURIComponent(AppState.currentEmail)}`;
+                            const account = AppState.accounts.find(a => a.email === AppState.currentEmail);
+                            const token = account ? account.token : '';
+                            const proxyUrl = `/api/emails/${emailId}/attachments/${att.id}?token=${encodeURIComponent(token)}`;
                             html = html.replace(new RegExp(`cid:${cid}`, 'gi'), proxyUrl);
                         }
                     });
@@ -500,7 +503,7 @@ function renderAttachments(attachments) {
                     ${formatFileSize(attachment.size)}
                 </div>
             </div>
-            <a href="/api/emails/${AppState.currentEmailDetail.id}/attachments/${attachment.id}?email=${encodeURIComponent(AppState.currentEmail)}" class="btn btn-ghost icon-only" title="Download" download>
+            <a href="/api/emails/${AppState.currentEmailDetail.id}/attachments/${attachment.id}?token=${encodeURIComponent(AppState.accounts.find(a => a.email === AppState.currentEmail)?.token || '')}" class="btn btn-ghost icon-only" title="Download" download>
                 <i data-feather="download"></i>
             </a>
         </div>
@@ -728,15 +731,24 @@ document.addEventListener('DOMContentLoaded', () => {
     if (AppState.accounts.length > 0) {
         $('#current-email').innerHTML = '<div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div> Recovering...';
         
+        const validAccounts = [];
         Promise.all(AppState.accounts.map(async (acc) => {
             const success = await loginEmail(acc.email, acc.password);
             if (success) {
-                // start listening directly via API call to avoid UI side effects for background accounts
-                apiCall('/api/listen', { method: 'POST', headers: { 'X-Inbox-Id': acc.email } }).catch(()=>{});
+                validAccounts.push(acc);
             }
         })).then(() => {
-            switchAccount(AppState.accounts[0].email);
-            showToast(`Recovered ${AppState.accounts.length} inboxes`, 'success');
+            AppState.accounts = validAccounts;
+            saveAccounts();
+            
+            if (AppState.accounts.length > 0) {
+                switchAccount(AppState.accounts[0].email);
+                showToast(`Recovered ${AppState.accounts.length} inboxes`, 'success');
+            } else {
+                $('#current-email').textContent = 'No email registered yet';
+                renderActiveInboxes();
+                showToast('Previous inboxes expired. Please register a new one.', 'info');
+            }
         });
     } else {
         renderActiveInboxes();
